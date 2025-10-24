@@ -41,3 +41,15 @@ Executive Gray theme with classic, professional styling. Customize tokens in `sr
 
 - If the backend runs on a different origin, configure CORS on the backend to allow the frontend origin (e.g., http://localhost:3000 during development).
 - Large file uploads depend on backend limits; adjust server config as needed.
+
+### Dev server preview: Invalid Host header
+
+In some preview environments the React dev server may display "Invalid Host header" because the Host header doesn’t match localhost.  
+This project includes a development-only configuration to allow the preview host:
+
+- `.env.development.local` sets:
+  - `HOST=0.0.0.0` so the dev server binds to all interfaces
+  - `DANGEROUSLY_DISABLE_HOST_CHECK=true` to accept the preview host header
+  - `WDS_SOCKET_PORT=3000` to align the dev-server client socket port
+
+These settings are only for development/preview. Do not use such settings for production builds.
