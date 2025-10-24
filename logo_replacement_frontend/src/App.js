@@ -33,11 +33,18 @@ function App() {
   const isReadyToStart = useMemo(() => status === 'READY', [status]);
   const isCompleted = useMemo(() => status === 'COMPLETED', [status]);
 
-  // API base URL - use proxy if available (CRA proxy) or use env var REACT_APP_API_BASE
+  // API base URL resolution:
+  // 1) REACT_APP_BACKEND_URL (preferred)
+  // 2) REACT_APP_API_BASE (legacy support)
+  // 3) Same-origin ('') which allows CRA proxy or reverse proxy in production
   const apiBase = useMemo(() => {
-    const envBase = process.env.REACT_APP_API_BASE;
-    if (envBase && envBase.trim() !== '') return envBase.replace(/\/+$/, '');
-    // default to same origin; CRA proxy can forward / to backend when configured in package.json
+    const envCandidates = [
+      process.env.REACT_APP_BACKEND_URL,
+      process.env.REACT_APP_API_BASE
+    ];
+    const chosen = envCandidates.find(v => typeof v === 'string' && v.trim() !== '');
+    if (chosen) return chosen.replace(/\/+$/, '');
+    // Fallback: same-origin so relative paths work with CRA proxy or reverse proxy
     return '';
   }, []);
 

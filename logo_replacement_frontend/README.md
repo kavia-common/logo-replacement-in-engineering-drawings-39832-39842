@@ -1,82 +1,43 @@
-# Lightweight React Template for KAVIA
+# Logo Replacement Frontend (React)
 
-This project provides a minimal React template with a clean, modern UI and minimal dependencies.
+A lightweight, modern UI for uploading drawing ZIPs and a logo image, starting processing, monitoring progress, and downloading results from the backend API.
 
-## Features
+## Quick Start
 
-- **Lightweight**: No heavy UI frameworks - uses only vanilla CSS and React
-- **Modern UI**: Clean, responsive design with KAVIA brand styling
-- **Fast**: Minimal dependencies for quick loading times
-- **Simple**: Easy to understand and modify
+- Install: `npm install`
+- Start (proxied to backend at http://localhost:3001 via CRA proxy): `npm start`
+- Start with explicit backend URL: `REACT_APP_BACKEND_URL=http://localhost:3001 npm start`
+- Build: `npm run build`
 
-## Getting Started
+The frontend resolves the API base via:
+1) `REACT_APP_BACKEND_URL` (preferred)
+2) `REACT_APP_API_BASE` (legacy support)
+3) Fallback to same-origin (''), which works with CRA proxy and reverse proxies.
 
-In the project directory, you can run:
+See ENVIRONMENT.md for details and examples.
 
-### `npm start`
+## Backend Integration
 
-Runs the app in development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Expected endpoints:
+- POST /jobs
+- POST /jobs/{job_id}/upload
+- POST /jobs/{job_id}/start
+- GET  /jobs/{job_id}/status
+- GET  /jobs/{job_id}/download
 
-### `npm test`
+Downloads should be served with `Content-Disposition: attachment; filename="processed_<job_id>.zip"` by the backend. The frontend also sets a safe default filename.
 
-Launches the test runner in interactive watch mode.
+## Theme
 
-### `npm run build`
+Executive Gray theme with classic, professional styling. Customize tokens in `src/App.css`.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Scripts
 
-## Customization
+- `npm start` - Dev server (http://localhost:3000)
+- `npm run build` - Production build
+- `npm test` - Tests
 
-### Colors
+## Notes
 
-The main brand colors are defined as CSS variables in `src/App.css`:
-
-```css
-:root {
-  --kavia-orange: #E87A41;
-  --kavia-dark: #1A1A1A;
-  --text-color: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(255, 255, 255, 0.1);
-}
-```
-
-### Components
-
-This template uses pure HTML/CSS components instead of a UI framework. You can find component styles in `src/App.css`. 
-
-Common components include:
-- Buttons (`.btn`, `.btn-large`)
-- Container (`.container`)
-- Navigation (`.navbar`)
-- Typography (`.title`, `.subtitle`, `.description`)
-
-## Learn More
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- If the backend runs on a different origin, configure CORS on the backend to allow the frontend origin (e.g., http://localhost:3000 during development).
+- Large file uploads depend on backend limits; adjust server config as needed.
