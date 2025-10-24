@@ -1,6 +1,6 @@
 # Environment and Integration Guide
 
-This frontend communicates with the FastAPI backend for job creation, uploads, status polling, and downloading results.
+This frontend communicates with the FastAPI backend for job creation, uploads, status polling, listing processed files, and downloading results.
 
 ## Frontend Environment Variables
 
@@ -37,17 +37,23 @@ When running the backend on a different origin (domain/port), ensure CORS allows
 - Allowed methods should cover: GET, POST, DELETE
 - Allow credentials if needed (not required by default here)
 
-## Downloads
+## Downloads and File Previews
 
-The backend should stream the ZIP with a `Content-Disposition: attachment; filename="processed_<job_id>.zip"` header.
-The frontend also sets a default filename fallback on the client to `processed_<job_id>.zip`.
+For the main ZIP download endpoint GET /jobs/{job_id}/download:
+- Headers required:
+  - Content-Disposition: attachment; filename="processed_<job_id>.zip"
+  - Access-Control-Expose-Headers: Content-Disposition   (so fetch() can read it across origins)
+  - Content-Type: application/zip
 
-If Content-Disposition is present, browsers will typically honor the provided filename automatically when using a direct window navigation.
-Because we use a Blob download and client-side anchor click, the explicit filename is set on the anchor element.
+For per-file download endpoint GET /jobs/{job_id}/files/{filename}:
+- Set Content-Type appropriately based on file extension (e.g., image/png, application/pdf)
+- Include:
+  - Content-Disposition: attachment; filename="<filename>"
+  - Access-Control-Expose-Headers: Content-Disposition
 
-CORS note: if your frontend is on a different origin, ensure the backend includes:
-- `Access-Control-Expose-Headers: Content-Disposition`
-so the app can read `Content-Disposition` and apply the filename in the download anchor.
+The frontend uses:
+- GET /jobs/{job_id}/files to list processed items and render a Results section with previews (images inline, PDFs as icon with View link).
+- GET /jobs/{job_id}/files/{filename} for "Open" (new tab) and "Download" actions.
 
 ## .env.example
 

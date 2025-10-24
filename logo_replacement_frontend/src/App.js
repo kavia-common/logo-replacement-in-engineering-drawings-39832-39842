@@ -11,6 +11,8 @@ import './App.css';
  * - POST /jobs/{job_id}/start
  * - GET  /jobs/{job_id}/status (polled every 2-3s)
  * - GET  /jobs/{job_id}/download
+ * - GET  /jobs/{job_id}/files
+ * - GET  /jobs/{job_id}/files/{filename}
  */
 function App() {
   // Theme handling (Executive Gray default)
@@ -24,14 +26,14 @@ function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [resultReady, setResultReady] = useState(false);
 
-  // Files
-  // drawingsZip: single optional ZIP file
+  // Result files (for on-screen preview/list)
+  const [files, setFiles] = useState([]);
+  const [filesError, setFilesError] = useState('');
+
+  // Files to upload
   const [drawingsZip, setDrawingsZip] = useState(null);
-  // drawingsFiles: optional multiple individual files (PNG/JPG/JPEG/TIFF/BMP/GIF/PDF)
   const [drawingsFiles, setDrawingsFiles] = useState([]);
-  // logoFile: required single file
   const [logoFile, setLogoFile] = useState(null);
-  // Inline validation error for form submission
   const [formError, setFormError] = useState('');
 
   const pollingRef = useRef(null);
@@ -40,9 +42,6 @@ function App() {
   const isCompleted = useMemo(() => status === 'COMPLETED', [status]);
 
   // API base URL resolution:
-  // 1) REACT_APP_BACKEND_URL (preferred)
-  // 2) REACT_APP_API_BASE (legacy support)
-  // 3) Same-origin ('') which allows CRA proxy or reverse proxy in production
   const apiBase = useMemo(() => {
     const envCandidates = [
       process.env.REACT_APP_BACKEND_URL,
@@ -50,7 +49,6 @@ function App() {
     ];
     const chosen = envCandidates.find(v => typeof v === 'string' && v.trim() !== '');
     if (chosen) return chosen.replace(/\/+$/, '');
-    // Fallback: same-origin so relative paths work with CRA proxy or reverse proxy
     return '';
   }, []);
 
@@ -69,6 +67,8 @@ function App() {
     setMessage('');
     setErrorMsg('');
     setResultReady(false);
+    setFiles([]);
+    setFilesError('');
   }, []);
 
   const resetAll = useCallback(() => {
@@ -84,6 +84,23 @@ function App() {
     setLogoFile(null);
     setFormError('');
   }, [clearStatus]);
+
+  // PUBLIC_INTERFACE
+  async function fetchProcessedFilesList(jid) {
+    /**
+     * Fetch list of processed files for the given job_id using GET /jobs/{job_id}/files.
+     * Returns an array of { filename, size, content_type } or throws on error.
+     */
+    const url = `${apiBase}/jobs/${encodeURIComponent(jid)}/files`;
+    const res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`Files list failed (${res.status}): ${txt || 'Unknown error'}`);
+    }
+    const data = await res.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    return items;
+  }
 
   const createJob = useCallback(async () => {
     setErrorMsg('');
@@ -112,9 +129,7 @@ function App() {
   const uploadFiles = useCallback(async (jid) => {
     if (!jid) return false;
 
-    // Client-side validation:
-    // - logo image is required
-    // - at least one drawings input: either a ZIP or one/more individual files
+    // Client-side validation
     if (!logoFile) {
       const msg = 'Please select a logo image before uploading.';
       setFormError(msg);
@@ -136,22 +151,9 @@ function App() {
     setStatus('UPLOADING');
     try {
       const form = new FormData();
-
-      // Append required logo under exact field name 'logo_image'
       form.append('logo_image', logoFile);
-
-      // Optional drawings_zip (single)
-      if (hasZip) {
-        form.append('drawings_zip', drawingsZip);
-      }
-
-      // Optional drawings_files (multiple) - append each file with the same key
-      if (hasFiles) {
-        const filesArr = Array.from(drawingsFiles);
-        filesArr.forEach((f) => {
-          form.append('drawings_files', f);
-        });
-      }
+      if (hasZip) form.append('drawings_zip', drawingsZip);
+      if (hasFiles) Array.from(drawingsFiles).forEach((f) => form.append('drawings_files', f));
 
       const res = await fetch(`${apiBase}/jobs/${encodeURIComponent(jid)}/upload`, {
         method: 'POST',
@@ -205,7 +207,7 @@ function App() {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
-    const intervalMs = 2500; // 2.5 seconds
+    const intervalMs = 2500;
     const tick = async () => {
       try {
         const res = await fetch(`${apiBase}/jobs/${encodeURIComponent(jid)}/status`, {
@@ -224,6 +226,15 @@ function App() {
           setResultReady(true);
           clearInterval(pollingRef.current);
           pollingRef.current = null;
+          // Fetch processed files list after completion
+          try {
+            const items = await fetchProcessedFilesList(jid);
+            setFiles(items);
+            setFilesError('');
+          } catch (err) {
+            setFiles([]);
+            setFilesError(err.message || 'Failed to load processed files list.');
+          }
         } else if (data.status === 'ERROR' || data.status === 'CANCELLED') {
           setErrorMsg(data.error || 'Job failed or cancelled.');
           clearInterval(pollingRef.current);
@@ -231,16 +242,13 @@ function App() {
         }
       } catch (err) {
         setErrorMsg(err.message || 'Failed to fetch status.');
-        // Keep polling, transient errors may resolve; stop if too many errors? Keep simple here.
       }
     };
-    // immediate call then interval
     tick();
     pollingRef.current = setInterval(tick, intervalMs);
   }, [apiBase]);
 
   useEffect(() => {
-    // Cleanup polling when unmounting
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
@@ -252,6 +260,8 @@ function App() {
   const handleCreateAndUpload = useCallback(async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setFiles([]);
+    setFilesError('');
     setResultReady(false);
     setProgress(0);
     setMessage('');
@@ -272,10 +282,13 @@ function App() {
     if (ok) pollStatus(jobId);
   }, [jobId, pollStatus, startProcessing]);
 
+  // PUBLIC_INTERFACE
   const handleDownload = useCallback(async () => {
+    /**
+     * Download the processed ZIP by fetching as Blob, parsing Content-Disposition for filename,
+     * and triggering browser download. Shows inline error toast on non-200.
+     */
     if (!jobId) return;
-
-    // Only allow when job is completed
     if (!isCompleted && !resultReady) {
       setErrorMsg('The job is not completed yet. Please wait until status is COMPLETED.');
       return;
@@ -284,39 +297,30 @@ function App() {
     setErrorMsg('');
     try {
       const url = `${apiBase}/jobs/${encodeURIComponent(jobId)}/download`;
-
-      // If backend uses cookie sessions, credentials: 'include' allows cookie to be sent.
       const res = await fetch(url, {
         method: 'GET',
+        // include credentials support if backend uses cookies; harmless otherwise
         credentials: 'include'
       });
 
       if (!res.ok) {
         let errDetail = '';
-        try {
-          errDetail = await res.text();
-        } catch {
-          // ignore
-        }
-        // If backend returns 409 for not-complete, show a friendly message
+        try { errDetail = await res.text(); } catch { /* ignore */ }
         const baseMsg = res.status === 409
           ? 'The job is not complete yet. Please wait until it reaches COMPLETED.'
-          : 'Unknown error';
+          : 'Download request failed.';
         throw new Error(`Download failed (${res.status}): ${errDetail || baseMsg}`);
       }
 
-      // Try to extract filename from Content-Disposition
       const cd = res.headers.get('Content-Disposition') || res.headers.get('content-disposition');
       let filename = `processed_${jobId}.zip`;
       if (cd) {
-        // Common patterns: attachment; filename="name.zip" or attachment; filename=name.zip
         const matchQuoted = cd.match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;]+)/i);
         if (matchQuoted) {
           filename = decodeURIComponent(matchQuoted[1] || matchQuoted[2] || matchQuoted[3]).trim();
         }
       }
 
-      // Read as blob and trigger browser download
       const blob = await res.blob();
       const dlUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -328,8 +332,77 @@ function App() {
       window.URL.revokeObjectURL(dlUrl);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to download result.');
+      // Fallback UX: keep showing per-file list if available
+      if (isCompleted || resultReady) {
+        try {
+          const items = await fetchProcessedFilesList(jobId);
+          setFiles(items);
+          setFilesError('');
+        } catch (e) {
+          setFilesError(e.message || 'Also failed to load per-file results.');
+        }
+      }
     }
   }, [apiBase, jobId, isCompleted, resultReady]);
+
+  // Helpers for per-file actions
+  const isPreviewableImage = useCallback((contentType = '', name = '') => {
+    const ct = (contentType || '').toLowerCase();
+    const nm = (name || '').toLowerCase();
+    return ct.startsWith('image/') || /\.(png|jpg|jpeg|gif|tif|tiff|bmp)$/i.test(nm);
+  }, []);
+
+  const isPdf = useCallback((contentType = '', name = '') => {
+    const ct = (contentType || '').toLowerCase();
+    const nm = (name || '').toLowerCase();
+    return ct === 'application/pdf' || /\.pdf$/i.test(nm);
+  }, []);
+
+  // PUBLIC_INTERFACE
+  const handleOpenFile = useCallback((item) => {
+    /**
+     * Open file in a new tab using the file endpoint. Browser will render images and PDFs natively.
+     */
+    if (!jobId || !item?.filename) return;
+    const url = `${apiBase}/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(item.filename)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }, [apiBase, jobId]);
+
+  // PUBLIC_INTERFACE
+  const handleDownloadFile = useCallback(async (item) => {
+    /**
+     * Download an individual processed file as blob and trigger browser save dialog.
+     */
+    if (!jobId || !item?.filename) return;
+    try {
+      const url = `${apiBase}/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(item.filename)}`;
+      const res = await fetch(url, { method: 'GET', credentials: 'include' });
+      if (!res.ok) {
+        let detail = '';
+        try { detail = await res.text(); } catch {}
+        throw new Error(`File download failed (${res.status}): ${detail || 'Unknown error'}`);
+      }
+      const cd = res.headers.get('Content-Disposition') || res.headers.get('content-disposition');
+      let filename = item.filename.split('/').pop();
+      if (cd) {
+        const matchQuoted = cd.match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;]+)/i);
+        if (matchQuoted) {
+          filename = decodeURIComponent(matchQuoted[1] || matchQuoted[2] || matchQuoted[3]).trim();
+        }
+      }
+      const blob = await res.blob();
+      const dlUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = dlUrl;
+      a.download = filename || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(dlUrl);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to download file.');
+    }
+  }, [apiBase, jobId]);
 
   // Accessibility helpers
   const drawingsZipInputId = 'drawings-zip-input';
@@ -519,9 +592,9 @@ function App() {
         </section>
 
         <section className="card" aria-labelledby="download-section-title">
-          <h2 id="download-section-title" className="section-title">3. Download</h2>
+          <h2 id="download-section-title" className="section-title">3. Download & Results</h2>
           <p className="description">
-            Download the processed ZIP once the job is completed.
+            After completion, download the ZIP or browse individual output files below.
           </p>
 
           <div className="actions">
@@ -535,6 +608,79 @@ function App() {
               Download Result ZIP
             </button>
           </div>
+
+          {/* Results Gallery/List */}
+          {isCompleted && (
+            <div style={{ marginTop: 16 }}>
+              <h3 className="section-title" style={{ marginBottom: 8 }}>Results</h3>
+              {filesError && (
+                <div className="alert alert-error" role="alert" style={{ marginBottom: 12 }}>
+                  {filesError}
+                </div>
+              )}
+              {Array.isArray(files) && files.length > 0 ? (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                  gap: 12
+                }}>
+                  {files.map((item, idx) => {
+                    const name = item.filename || `file-${idx}`;
+                    const contentType = item.content_type || '';
+                    const fileUrl = `${apiBase}/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(name)}`;
+
+                    return (
+                      <div key={`${name}-${idx}`} className="card" style={{ padding: 12 }}>
+                        <div style={{ marginBottom: 8, minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)' }}>
+                          {isPreviewableImage(contentType, name) ? (
+                            // Use direct URL; browser will fetch and show. Alternatively, could fetch blob and objectURL for stricter CORS.
+                            <img
+                              src={fileUrl}
+                              alt={name}
+                              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                            />
+                          ) : isPdf(contentType, name) ? (
+                            <div style={{ textAlign: 'center', color: 'var(--primary)', padding: 12 }}>
+                              <div style={{ fontSize: 48, lineHeight: 1 }}>📄</div>
+                              <div style={{ fontSize: 12, marginTop: 4 }}>PDF</div>
+                            </div>
+                          ) : (
+                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 12 }}>
+                              <div style={{ fontSize: 36, lineHeight: 1 }}>🗂️</div>
+                              <div style={{ fontSize: 12, marginTop: 4 }}>No preview</div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ marginBottom: 8, color: 'var(--primary)', fontWeight: 600, fontSize: 13, wordBreak: 'break-all' }}>
+                          {name}
+                        </div>
+
+                        <div className="actions">
+                          <button
+                            className="btn btn-secondary"
+                            type="button"
+                            onClick={() => handleOpenFile(item)}
+                          >
+                            Open
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            type="button"
+                            onClick={() => handleDownloadFile(item)}
+                          >
+                            Download
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="help-text">No files listed yet.</div>
+              )}
+            </div>
+          )}
         </section>
 
         {(errorMsg || message) && (
@@ -556,8 +702,9 @@ function App() {
           <h2 id="help-title" className="section-title">Notes</h2>
           <ul className="notes-list">
             <li>Polling interval is approximately 2.5 seconds.</li>
-            <li>If the API is hosted on a different origin, set REACT_APP_API_BASE in your environment.</li>
+            <li>If the API is hosted on a different origin, set REACT_APP_BACKEND_URL or REACT_APP_API_BASE in your environment.</li>
             <li>Ensure your drawings ZIP is not corrupted and that the logo is a supported image format.</li>
+            <li>For cross-origin downloads, backend must expose header: Access-Control-Expose-Headers: Content-Disposition.</li>
           </ul>
         </section>
       </main>
