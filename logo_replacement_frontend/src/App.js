@@ -25,8 +25,14 @@ function App() {
   const [resultReady, setResultReady] = useState(false);
 
   // Files
-  const [drawingsFile, setDrawingsFile] = useState(null);
+  // drawingsZip: single optional ZIP file
+  const [drawingsZip, setDrawingsZip] = useState(null);
+  // drawingsFiles: optional multiple individual files (PNG/JPG/JPEG/TIFF/BMP/GIF/PDF)
+  const [drawingsFiles, setDrawingsFiles] = useState([]);
+  // logoFile: required single file
   const [logoFile, setLogoFile] = useState(null);
+  // Inline validation error for form submission
+  const [formError, setFormError] = useState('');
 
   const pollingRef = useRef(null);
   const isRunning = useMemo(() => status === 'RUNNING', [status]);
@@ -73,8 +79,10 @@ function App() {
     }
     setJobId('');
     clearStatus();
-    setDrawingsFile(null);
+    setDrawingsZip(null);
+    setDrawingsFiles([]);
     setLogoFile(null);
+    setFormError('');
   }, [clearStatus]);
 
   const createJob = useCallback(async () => {
@@ -103,17 +111,48 @@ function App() {
 
   const uploadFiles = useCallback(async (jid) => {
     if (!jid) return false;
-    if (!drawingsFile || !logoFile) {
-      setErrorMsg('Please select both a drawings ZIP and a logo image.');
+
+    // Client-side validation:
+    // - logo image is required
+    // - at least one drawings input: either a ZIP or one/more individual files
+    if (!logoFile) {
+      const msg = 'Please select a logo image before uploading.';
+      setFormError(msg);
+      setErrorMsg(msg);
       return false;
     }
+    const hasZip = !!drawingsZip;
+    const hasFiles = Array.isArray(drawingsFiles) ? drawingsFiles.length > 0 : (drawingsFiles && drawingsFiles.length > 0);
+    if (!hasZip && !hasFiles) {
+      const msg = 'Please add drawings: either a ZIP or one or more individual files.';
+      setFormError(msg);
+      setErrorMsg(msg);
+      return false;
+    }
+
+    setFormError('');
     setErrorMsg('');
     setMessage('Uploading files...');
     setStatus('UPLOADING');
     try {
       const form = new FormData();
-      form.append('drawings', drawingsFile);
-      form.append('logo', logoFile);
+
+      // Append required logo under exact field name 'logo_image'
+      form.append('logo_image', logoFile);
+
+      // Optional drawings_zip (single)
+      if (hasZip) {
+        form.append('drawings_zip', drawingsZip);
+      }
+
+      // Optional drawings_files (multiple) - append each file with the same key
+      if (hasFiles) {
+        const filesArr = Array.from(drawingsFiles);
+        filesArr.forEach((f) => {
+          form.append('drawings_files', f);
+        });
+      }
+
       const res = await fetch(`${apiBase}/jobs/${encodeURIComponent(jid)}/upload`, {
         method: 'POST',
         body: form
@@ -133,7 +172,7 @@ function App() {
       setMessage('');
       return false;
     }
-  }, [apiBase, drawingsFile, logoFile]);
+  }, [apiBase, drawingsZip, drawingsFiles, logoFile]);
 
   const startProcessing = useCallback(async (jid) => {
     if (!jid) return false;
@@ -259,7 +298,8 @@ function App() {
   }, [apiBase, jobId]);
 
   // Accessibility helpers
-  const drawingsInputId = 'drawings-zip-input';
+  const drawingsZipInputId = 'drawings-zip-input';
+  const drawingsFilesInputId = 'drawings-files-input';
   const logoInputId = 'logo-image-input';
   const progressId = 'job-progress';
 
@@ -294,43 +334,65 @@ function App() {
 
           <form className="form-grid" onSubmit={handleCreateAndUpload} noValidate>
             <div className="form-control">
-              <label htmlFor={drawingsInputId} className="label">
-                Drawings ZIP
+              <label htmlFor={drawingsZipInputId} className="label">
+                Drawings ZIP (optional)
               </label>
               <input
-                id={drawingsInputId}
-                name="drawings"
+                id={drawingsZipInputId}
+                name="drawings_zip"
                 type="file"
                 accept=".zip,application/zip"
-                onChange={(e) => setDrawingsFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
-                aria-describedby="drawings-help"
-                required
+                onChange={(e) => setDrawingsZip(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                aria-describedby="drawings-zip-help"
               />
-              <div id="drawings-help" className="help-text">
-                A ZIP containing drawing images (PNG/JPG/PDF as supported by backend).
+              <div id="drawings-zip-help" className="help-text">
+                Upload a ZIP containing drawings (images/PDFs). Alternatively, add individual files below.
               </div>
-              {drawingsFile && (
+              {drawingsZip && (
                 <div className="file-pill" aria-live="polite">
-                  {drawingsFile.name}
+                  {drawingsZip.name}
+                </div>
+              )}
+            </div>
+
+            <div className="form-control">
+              <label htmlFor={drawingsFilesInputId} className="label">
+                Individual Drawings (optional, multiple)
+              </label>
+              <input
+                id={drawingsFilesInputId}
+                name="drawings_files"
+                type="file"
+                multiple
+                accept=".pdf,application/pdf,image/png,image/jpeg,image/jpg,image/gif,image/tiff,image/bmp"
+                onChange={(e) => setDrawingsFiles(e.target.files ? Array.from(e.target.files) : [])}
+                aria-describedby="drawings-files-help"
+              />
+              <div id="drawings-files-help" className="help-text">
+                Add one or more files (PDF, PNG, JPG/JPEG, TIFF, BMP, GIF). You may use this or the ZIP above.
+              </div>
+              {Array.isArray(drawingsFiles) && drawingsFiles.length > 0 && (
+                <div className="file-pill" aria-live="polite">
+                  {drawingsFiles.length} file(s) selected
                 </div>
               )}
             </div>
 
             <div className="form-control">
               <label htmlFor={logoInputId} className="label">
-                Logo Image
+                Logo Image (required)
               </label>
               <input
                 id={logoInputId}
-                name="logo"
+                name="logo_image"
                 type="file"
-                accept="image/*"
+                accept=".png,.jpg,.jpeg,.gif,.bmp,.tif,.tiff,image/*,.pdf,application/pdf"
                 onChange={(e) => setLogoFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
                 aria-describedby="logo-help"
                 required
               />
               <div id="logo-help" className="help-text">
-                The logo image that will replace detected logos in the drawings.
+                Select the logo image to overlay (common image types or PDF supported by backend).
               </div>
               {logoFile && (
                 <div className="file-pill" aria-live="polite">
@@ -339,12 +401,18 @@ function App() {
               )}
             </div>
 
+            {formError && (
+              <div className="alert alert-error" role="alert" style={{ gridColumn: '1 / -1' }}>
+                {formError}
+              </div>
+            )}
+
             <div className="actions">
               <button
                 className="btn btn-primary"
                 type="submit"
-                disabled={!drawingsFile || !logoFile || Boolean(jobId && status && status !== 'PENDING' && status !== '')}
-                aria-disabled={!drawingsFile || !logoFile}
+                disabled={(!drawingsZip && (!drawingsFiles || drawingsFiles.length === 0)) || !logoFile || Boolean(jobId && status && status !== 'PENDING' && status !== '')}
+                aria-disabled={(!drawingsZip && (!drawingsFiles || drawingsFiles.length === 0)) || !logoFile}
               >
                 Create Job & Upload
               </button>
@@ -352,7 +420,7 @@ function App() {
                 className="btn btn-secondary"
                 type="button"
                 onClick={resetAll}
-                disabled={!drawingsFile && !logoFile && !jobId}
+                disabled={!drawingsZip && (!drawingsFiles || drawingsFiles.length === 0) && !logoFile && !jobId}
               >
                 Reset
               </button>
@@ -373,6 +441,10 @@ function App() {
             <div className="meta-row">
               <span className="meta-label">Message:</span>
               <span className="meta-value">{message || '—'}</span>
+            </div>
+            <div className="meta-row">
+              <span className="meta-label">Upload Keys:</span>
+              <span className="meta-value">logo_image, drawings_zip (optional), drawings_files (optional, multiple)</span>
             </div>
           </div>
         </section>
