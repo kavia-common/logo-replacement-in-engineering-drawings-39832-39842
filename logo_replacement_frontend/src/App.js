@@ -274,20 +274,54 @@ function App() {
 
   const handleDownload = useCallback(async () => {
     if (!jobId) return;
+
+    // Only allow when job is completed
+    if (!isCompleted && !resultReady) {
+      setErrorMsg('The job is not completed yet. Please wait until status is COMPLETED.');
+      return;
+    }
+
     setErrorMsg('');
     try {
       const url = `${apiBase}/jobs/${encodeURIComponent(jobId)}/download`;
-      // Trigger browser download
-      const res = await fetch(url, { method: 'GET' });
+
+      // If backend uses cookie sessions, credentials: 'include' allows cookie to be sent.
+      const res = await fetch(url, {
+        method: 'GET',
+        credentials: 'include'
+      });
+
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`Download failed (${res.status}): ${txt || 'Unknown error'}`);
+        let errDetail = '';
+        try {
+          errDetail = await res.text();
+        } catch {
+          // ignore
+        }
+        // If backend returns 409 for not-complete, show a friendly message
+        const baseMsg = res.status === 409
+          ? 'The job is not complete yet. Please wait until it reaches COMPLETED.'
+          : 'Unknown error';
+        throw new Error(`Download failed (${res.status}): ${errDetail || baseMsg}`);
       }
+
+      // Try to extract filename from Content-Disposition
+      const cd = res.headers.get('Content-Disposition') || res.headers.get('content-disposition');
+      let filename = `processed_${jobId}.zip`;
+      if (cd) {
+        // Common patterns: attachment; filename="name.zip" or attachment; filename=name.zip
+        const matchQuoted = cd.match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;]+)/i);
+        if (matchQuoted) {
+          filename = decodeURIComponent(matchQuoted[1] || matchQuoted[2] || matchQuoted[3]).trim();
+        }
+      }
+
+      // Read as blob and trigger browser download
       const blob = await res.blob();
       const dlUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = dlUrl;
-      a.download = `processed_${jobId}.zip`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -295,7 +329,7 @@ function App() {
     } catch (err) {
       setErrorMsg(err.message || 'Failed to download result.');
     }
-  }, [apiBase, jobId]);
+  }, [apiBase, jobId, isCompleted, resultReady]);
 
   // Accessibility helpers
   const drawingsZipInputId = 'drawings-zip-input';
@@ -495,8 +529,8 @@ function App() {
               className="btn btn-primary"
               type="button"
               onClick={handleDownload}
-              disabled={!jobId || !resultReady}
-              aria-disabled={!jobId || !resultReady}
+              disabled={!jobId || !isCompleted}
+              aria-disabled={!jobId || !isCompleted}
             >
               Download Result ZIP
             </button>

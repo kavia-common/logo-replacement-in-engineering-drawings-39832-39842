@@ -45,6 +45,10 @@ The frontend also sets a default filename fallback on the client to `processed_<
 If Content-Disposition is present, browsers will typically honor the provided filename automatically when using a direct window navigation.
 Because we use a Blob download and client-side anchor click, the explicit filename is set on the anchor element.
 
+CORS note: if your frontend is on a different origin, ensure the backend includes:
+- `Access-Control-Expose-Headers: Content-Disposition`
+so the app can read `Content-Disposition` and apply the filename in the download anchor.
+
 ## .env.example
 
 Create a `.env` file based on the following example for your environment:
