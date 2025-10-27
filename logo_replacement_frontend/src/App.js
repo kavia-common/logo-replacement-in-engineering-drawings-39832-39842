@@ -478,7 +478,7 @@ function App() {
             </div>
           </div>
         </div>
-        <div className="navbar-right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="navbar-right" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <button
             className="btn theme-toggle"
             onClick={toggleTheme}
@@ -525,12 +525,12 @@ function App() {
               boxShadow: isDragging ? 'var(--shadow)' : 'none'
             }}
           >
-            <div style={{ fontSize: 42, marginBottom: 8 }}>⬆️</div>
+            <div style={{ fontSize: 42, marginBottom: 'var(--space-2)' }}>⬆️</div>
             <div style={{ fontWeight: 800, color: 'var(--primary)' }}>Drag & Drop Files</div>
-            <div style={{ fontSize: 12, marginTop: 6 }}>
+            <div style={{ fontSize: 12, marginTop: 'var(--space-2)' }}>
               Drop a ZIP of drawings and an image for your logo. PDFs and images are supported.
             </div>
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 'var(--space-3)' }}>
               {drawingsZip && <span className="file-pill">ZIP: {drawingsZip.name}</span>}
               {logoFile && <span className="file-pill" style={{ marginLeft: 8 }}>Logo: {logoFile.name}</span>}
               {Array.isArray(drawingsFiles) && drawingsFiles.length > 0 && (
@@ -541,7 +541,7 @@ function App() {
             </div>
           </div>
 
-          <form className="form-grid" onSubmit={handleCreateAndUpload} noValidate style={{ marginTop: 16 }}>
+          <form className="form-grid" onSubmit={handleCreateAndUpload} noValidate style={{ marginTop: 'var(--space-4)' }}>
             <div className="form-control">
               <label htmlFor={drawingsZipInputId} className="label">
                 Drawings ZIP (optional)
@@ -725,7 +725,7 @@ function App() {
               }`}
             </style>
             <div id={progressId} className="sr-only">{progress}%</div>
-            <div className="status-hint">
+            <div className="status-hint" style={{ marginTop: 'var(--space-2)' }}>
               {isRunning && 'Processing drawings...'}
               {isCompleted && 'Processing completed.'}
               {status === 'READY' && 'Ready to start processing.'}
@@ -753,10 +753,10 @@ function App() {
 
           {/* Results Gallery/List */}
           {isCompleted && (
-            <div style={{ marginTop: 16 }}>
-              <h3 className="section-title" style={{ marginBottom: 8 }}>Results</h3>
+            <div style={{ marginTop: 'var(--space-4)' }}>
+              <h3 className="section-title" style={{ marginBottom: 'var(--space-2)' }}>Results</h3>
               {filesError && (
-                <div className="alert alert-error" role="alert" style={{ marginBottom: 12 }}>
+                <div className="alert alert-error" role="alert" style={{ marginBottom: 'var(--space-3)' }}>
                   {filesError}
                 </div>
               )}
@@ -777,19 +777,19 @@ function App() {
                               style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                             />
                           ) : isPdf(contentType, name) ? (
-                            <div style={{ textAlign: 'center', color: 'var(--primary)', padding: 12 }}>
+                            <div style={{ textAlign: 'center', color: 'var(--primary)', padding: 'var(--space-3)' }}>
                               <div style={{ fontSize: 48, lineHeight: 1 }}>📄</div>
-                              <div style={{ fontSize: 12, marginTop: 4 }}>PDF</div>
+                              <div style={{ fontSize: 12, marginTop: 'var(--space-1)' }}>PDF</div>
                             </div>
                           ) : (
-                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 12 }}>
+                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 'var(--space-3)' }}>
                               <div style={{ fontSize: 36, lineHeight: 1 }}>🗂️</div>
-                              <div style={{ fontSize: 12, marginTop: 4 }}>No preview</div>
+                              <div style={{ fontSize: 12, marginTop: 'var(--space-1)' }}>No preview</div>
                             </div>
                           )}
                         </div>
 
-                        <div style={{ marginBottom: 8, color: 'var(--primary)', fontWeight: 600, fontSize: 13, wordBreak: 'break-all' }}>
+                        <div style={{ marginBottom: 'var(--space-2)', color: 'var(--primary)', fontWeight: 600, fontSize: 13, wordBreak: 'break-all' }}>
                           {name}
                         </div>
 
