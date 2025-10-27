@@ -5,11 +5,13 @@ import './App.css';
  * PUBLIC_INTERFACE
  * App
  * Single-page UI to upload a drawings ZIP and a logo image, initiate processing, poll job status,
- * and download the processed ZIP. Uses backend endpoints:
+ * and download the processed ZIP with a refined Executive Gray theme and polished UX.
+ *
+ * Endpoints used (unchanged):
  * - POST /jobs
  * - POST /jobs/{job_id}/upload
  * - POST /jobs/{job_id}/start
- * - GET  /jobs/{job_id}/status (polled every 2-3s)
+ * - GET  /jobs/{job_id}/status
  * - GET  /jobs/{job_id}/download
  * - GET  /jobs/{job_id}/files
  * - GET  /jobs/{job_id}/files/{filename}
@@ -35,6 +37,9 @@ function App() {
   const [drawingsFiles, setDrawingsFiles] = useState([]);
   const [logoFile, setLogoFile] = useState(null);
   const [formError, setFormError] = useState('');
+
+  // Drag-and-drop state
+  const [isDragging, setIsDragging] = useState(false);
 
   const pollingRef = useRef(null);
   const isRunning = useMemo(() => status === 'RUNNING', [status]);
@@ -72,7 +77,6 @@ function App() {
   }, []);
 
   const resetAll = useCallback(() => {
-    // Stop polling if any
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -226,7 +230,6 @@ function App() {
           setResultReady(true);
           clearInterval(pollingRef.current);
           pollingRef.current = null;
-          // Fetch processed files list after completion
           try {
             const items = await fetchProcessedFilesList(jid);
             setFiles(items);
@@ -299,7 +302,6 @@ function App() {
       const url = `${apiBase}/jobs/${encodeURIComponent(jobId)}/download`;
       const res = await fetch(url, {
         method: 'GET',
-        // include credentials support if backend uses cookies; harmless otherwise
         credentials: 'include'
       });
 
@@ -332,7 +334,6 @@ function App() {
       window.URL.revokeObjectURL(dlUrl);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to download result.');
-      // Fallback UX: keep showing per-file list if available
       if (isCompleted || resultReady) {
         try {
           const items = await fetchProcessedFilesList(jobId);
@@ -348,7 +349,7 @@ function App() {
   // Helpers for per-file actions
   const isPreviewableImage = useCallback((contentType = '', name = '') => {
     const ct = (contentType || '').toLowerCase();
-    const nm = (name || '').toLowerCase();
+       const nm = (name || '').toLowerCase();
     return ct.startsWith('image/') || /\.(png|jpg|jpeg|gif|tif|tiff|bmp)$/i.test(nm);
   }, []);
 
@@ -410,9 +411,44 @@ function App() {
   const logoInputId = 'logo-image-input';
   const progressId = 'job-progress';
 
+  // Drag-and-drop handlers (for the main upload area)
+  const onDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+  const onDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+  const onDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const dt = e.dataTransfer;
+    if (!dt?.files?.length) return;
+    const filesArr = Array.from(dt.files);
+
+    const zipCandidate = filesArr.find(f => /\.zip$/i.test(f.name));
+    const logoCandidate = filesArr.find(f => /\.(png|jpg|jpeg|gif|bmp|tif|tiff|pdf)$/i.test(f.name));
+
+    if (zipCandidate) setDrawingsZip(zipCandidate);
+    const others = filesArr.filter(f => !/\.zip$/i.test(f.name));
+    if (others.length > 0) setDrawingsFiles(prev => [...prev, ...others]);
+    if (logoCandidate) setLogoFile(logoCandidate);
+  }, []);
+
   return (
     <div className="App">
-      <header className="navbar" role="banner" aria-label="Application header">
+      <header
+        className="navbar"
+        role="banner"
+        aria-label="Application header"
+        style={{
+          background: 'linear-gradient(180deg, rgba(55,65,81,0.06), rgba(156,163,175,0.06)), var(--surface)'
+        }}
+      >
         <div className="navbar-left">
           <div className="brand-logo" aria-hidden="true">LR</div>
           <div className="brand-text">
@@ -420,7 +456,7 @@ function App() {
             <p className="subtitle">Engineering Drawings Automation</p>
           </div>
         </div>
-        <div className="navbar-right">
+        <div className="navbar-right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
             className="btn theme-toggle"
             onClick={toggleTheme}
@@ -436,10 +472,55 @@ function App() {
         <section className="card" aria-labelledby="upload-section-title">
           <h2 id="upload-section-title" className="section-title">1. Upload</h2>
           <p className="description">
-            Upload a ZIP containing your drawings and the new logo image. After upload, start processing and monitor progress.
+            Drag-and-drop your drawings ZIP and select a logo image below, or use the file pickers. Then upload to prepare processing.
           </p>
 
-          <form className="form-grid" onSubmit={handleCreateAndUpload} noValidate>
+          {/* Drag-and-drop zone */}
+          <div
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            role="button"
+            tabIndex={0}
+            aria-label="Drag and drop files here"
+            onKeyDown={(e) => {
+              // keyboard hint: pressing Enter focuses the first picker
+              if (e.key === 'Enter') {
+                const el = document.getElementById(drawingsZipInputId);
+                if (el) el.focus();
+              }
+            }}
+            style={{
+              border: `2px dashed ${isDragging ? 'var(--primary)' : 'var(--border)'}`,
+              background: isDragging
+                ? 'linear-gradient(180deg, rgba(55,65,81,0.08), rgba(156,163,175,0.08)), var(--surface)'
+                : 'var(--surface)',
+              color: 'var(--text-muted)',
+              borderRadius: 12,
+              padding: 24,
+              textAlign: 'center',
+              transition: 'all .2s ease',
+              outline: 'none',
+              boxShadow: isDragging ? 'var(--shadow)' : 'none'
+            }}
+          >
+            <div style={{ fontSize: 42, marginBottom: 8 }}>⬆️</div>
+            <div style={{ fontWeight: 700, color: 'var(--primary)' }}>Drag & Drop Files</div>
+            <div style={{ fontSize: 12, marginTop: 6 }}>
+              Drop a ZIP of drawings and an image for your logo. PDFs and images are supported.
+            </div>
+            <div style={{ marginTop: 10 }}>
+              {drawingsZip && <span className="file-pill">ZIP: {drawingsZip.name}</span>}
+              {logoFile && <span className="file-pill" style={{ marginLeft: 8 }}>Logo: {logoFile.name}</span>}
+              {Array.isArray(drawingsFiles) && drawingsFiles.length > 0 && (
+                <span className="file-pill" style={{ marginLeft: 8 }}>
+                  {drawingsFiles.length} individual file(s)
+                </span>
+              )}
+            </div>
+          </div>
+
+          <form className="form-grid" onSubmit={handleCreateAndUpload} noValidate style={{ marginTop: 16 }}>
             <div className="form-control">
               <label htmlFor={drawingsZipInputId} className="label">
                 Drawings ZIP (optional)
@@ -485,7 +566,7 @@ function App() {
               )}
             </div>
 
-            <div className="form-control">
+            <div className="form-control" style={{ gridColumn: '1 / -1' }}>
               <label htmlFor={logoInputId} className="label">
                 Logo Image (required)
               </label>
@@ -514,7 +595,7 @@ function App() {
               </div>
             )}
 
-            <div className="actions">
+            <div className="actions" style={{ gridColumn: '1 / -1' }}>
               <button
                 className="btn btn-primary"
                 type="submit"
@@ -550,8 +631,10 @@ function App() {
               <span className="meta-value">{message || '—'}</span>
             </div>
             <div className="meta-row">
-              <span className="meta-label">Upload Keys:</span>
-              <span className="meta-value">logo_image, drawings_zip (optional), drawings_files (optional, multiple)</span>
+              <span className="meta-label">Selected:</span>
+              <span className="meta-value">
+                {drawingsZip ? `ZIP: ${drawingsZip.name}` : 'No ZIP'} • {logoFile ? `Logo: ${logoFile.name}` : 'No Logo'}
+              </span>
             </div>
           </div>
         </section>
@@ -574,14 +657,52 @@ function App() {
             </button>
           </div>
 
+          {/* Animated progress */}
           <div className="progress-wrapper" aria-live="polite" aria-atomic="true">
             <div className="progress-labels">
               <span>Progress</span>
               <span>{progress}%</span>
             </div>
-            <div className="progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-describedby={progressId}>
-              <div className="progress-fill" style={{ width: `${Math.min(Math.max(progress, 0), 100)}%` }} />
+            <div
+              className="progress-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress}
+              aria-describedby={progressId}
+              style={{ position: 'relative' }}
+            >
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${Math.min(Math.max(progress, 0), 100)}%`,
+                  position: 'relative'
+                }}
+              />
+              {/* subtle animated shimmer when running */}
+              {isRunning && (
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    width: '30%',
+                    left: 0,
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+                    animation: 'shimmer 1.2s infinite',
+                    mixBlendMode: 'overlay',
+                    borderRadius: 999
+                  }}
+                />
+              )}
             </div>
+            <style>
+              {`@keyframes shimmer {
+                0% { transform: translateX(0%); }
+                100% { transform: translateX(250%); }
+              }`}
+            </style>
             <div id={progressId} className="sr-only">{progress}%</div>
             <div className="status-hint">
               {isRunning && 'Processing drawings...'}
@@ -619,21 +740,16 @@ function App() {
                 </div>
               )}
               {Array.isArray(files) && files.length > 0 ? (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                  gap: 12
-                }}>
+                <div className="results-grid">
                   {files.map((item, idx) => {
                     const name = item.filename || `file-${idx}`;
                     const contentType = item.content_type || '';
                     const fileUrl = `${apiBase}/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(name)}`;
 
                     return (
-                      <div key={`${name}-${idx}`} className="card" style={{ padding: 12 }}>
-                        <div style={{ marginBottom: 8, minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)' }}>
+                      <div key={`${name}-${idx}`} className="card results-card">
+                        <div className="results-preview">
                           {isPreviewableImage(contentType, name) ? (
-                            // Use direct URL; browser will fetch and show. Alternatively, could fetch blob and objectURL for stricter CORS.
                             <img
                               src={fileUrl}
                               alt={name}

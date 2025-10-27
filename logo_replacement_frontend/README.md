@@ -1,6 +1,6 @@
 # Logo Replacement Frontend (React)
 
-A lightweight, modern UI for uploading drawing ZIPs and a logo image, starting processing, monitoring progress, and downloading results from the backend API.
+A refined, classic Executive Gray UI for uploading drawing ZIPs and a logo image, starting processing, monitoring progress, and downloading results from the backend API.
 
 ## Quick Start
 
@@ -24,12 +24,34 @@ Expected endpoints:
 - POST /jobs/{job_id}/start
 - GET  /jobs/{job_id}/status
 - GET  /jobs/{job_id}/download
+- GET  /jobs/{job_id}/files
+- GET  /jobs/{job_id}/files/{filename}
 
 Downloads should be served with `Content-Disposition: attachment; filename="processed_<job_id>.zip"` by the backend. The frontend also sets a safe default filename.
 
-## Theme
+## UI & Theme
 
-Executive Gray theme with classic, professional styling. Customize tokens in `src/App.css`.
+This version introduces a polished, single-page layout with:
+- Professional header with subtle gradient
+- Central drag-and-drop upload card supporting ZIP + logo image
+- Animated progress indicator with shimmer while running
+- Results/download section with styled cards and status states
+
+Executive Gray theme tokens are defined in `src/App.css`:
+- `--primary: #374151` (charcoal)
+- `--secondary: #9CA3AF` (silver)
+- `--success: #059669`
+- `--error: #DC2626`
+- `--bg`, `--surface`, `--text`, `--text-muted`, `--border`, and `--shadow`
+
+Dark mode is supported by toggling the theme in the header; all tokens are defined under `[data-theme="dark"]`.
+
+### Where to customize
+- Colors, radii, shadows: `src/App.css` (root CSS variables)
+- Layout & components: `src/App.js` (single page, kept intentionally simple)
+- Accessibility: ARIA roles, labels, and progress semantics are included; extend as needed.
+
+No heavy tooling (like Tailwind) is introduced; styling uses plain CSS for performance and simplicity.
 
 ## Scripts
 
@@ -41,6 +63,7 @@ Executive Gray theme with classic, professional styling. Customize tokens in `sr
 
 - If the backend runs on a different origin, configure CORS on the backend to allow the frontend origin (e.g., http://localhost:3000 during development).
 - Large file uploads depend on backend limits; adjust server config as needed.
+- For cross-origin downloads, ensure the backend exposes `Access-Control-Expose-Headers: Content-Disposition`.
 
 ### Dev server preview: Invalid Host header
 
