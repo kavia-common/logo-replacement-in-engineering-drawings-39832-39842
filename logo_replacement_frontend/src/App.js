@@ -41,6 +41,15 @@ function App() {
   // Drag-and-drop state
   const [isDragging, setIsDragging] = useState(false);
 
+  // For stepbar active state
+  const currentStep = useMemo(() => {
+    if (!jobId) return 1;
+    if (status === 'READY' || status === 'UPLOADING' || status === 'PENDING') return 2;
+    if (status === 'RUNNING') return 2;
+    if (status === 'COMPLETED') return 3;
+    return 1;
+  }, [jobId, status]);
+
   const pollingRef = useRef(null);
   const isRunning = useMemo(() => status === 'RUNNING', [status]);
   const isReadyToStart = useMemo(() => status === 'READY', [status]);
@@ -445,15 +454,28 @@ function App() {
         className="navbar"
         role="banner"
         aria-label="Application header"
-        style={{
-          background: 'linear-gradient(180deg, rgba(55,65,81,0.06), rgba(156,163,175,0.06)), var(--surface)'
-        }}
       >
         <div className="navbar-left">
           <div className="brand-logo" aria-hidden="true">LR</div>
           <div className="brand-text">
             <h1 className="title">Logo Replacement</h1>
             <p className="subtitle">Engineering Drawings Automation</p>
+          </div>
+
+          {/* Compact step status bar */}
+          <div className="stepbar" aria-label="Current step">
+            <div className={`step ${currentStep === 1 ? 'active' : ''}`} aria-current={currentStep === 1 ? 'step' : undefined}>
+              <span className={`dot ${currentStep >= 1 ? 'on' : ''}`} />
+              <span>Upload</span>
+            </div>
+            <div className={`step ${currentStep === 2 ? 'active' : ''}`} aria-current={currentStep === 2 ? 'step' : undefined}>
+              <span className={`dot ${currentStep >= 2 ? 'on' : ''}`} />
+              <span>Process</span>
+            </div>
+            <div className={`step ${currentStep === 3 ? 'active' : ''}`} aria-current={currentStep === 3 ? 'step' : undefined}>
+              <span className={`dot ${currentStep >= 3 ? 'on' : ''}`} />
+              <span>Results</span>
+            </div>
           </div>
         </div>
         <div className="navbar-right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -469,7 +491,7 @@ function App() {
       </header>
 
       <main className="container" role="main">
-        <section className="card" aria-labelledby="upload-section-title">
+        <section className="card" aria-labelledby="upload-section-title" style={{ animationDelay: '0.05s' }}>
           <h2 id="upload-section-title" className="section-title">1. Upload</h2>
           <p className="description">
             Drag-and-drop your drawings ZIP and select a logo image below, or use the file pickers. Then upload to prepare processing.
@@ -484,7 +506,6 @@ function App() {
             tabIndex={0}
             aria-label="Drag and drop files here"
             onKeyDown={(e) => {
-              // keyboard hint: pressing Enter focuses the first picker
               if (e.key === 'Enter') {
                 const el = document.getElementById(drawingsZipInputId);
                 if (el) el.focus();
@@ -505,7 +526,7 @@ function App() {
             }}
           >
             <div style={{ fontSize: 42, marginBottom: 8 }}>⬆️</div>
-            <div style={{ fontWeight: 700, color: 'var(--primary)' }}>Drag & Drop Files</div>
+            <div style={{ fontWeight: 800, color: 'var(--primary)' }}>Drag & Drop Files</div>
             <div style={{ fontSize: 12, marginTop: 6 }}>
               Drop a ZIP of drawings and an image for your logo. PDFs and images are supported.
             </div>
@@ -639,7 +660,7 @@ function App() {
           </div>
         </section>
 
-        <section className="card" aria-labelledby="process-section-title">
+        <section className="card" aria-labelledby="process-section-title" style={{ animationDelay: '0.1s' }}>
           <h2 id="process-section-title" className="section-title">2. Process</h2>
           <p className="description">
             Start background processing once files have been uploaded. The status will be polled automatically.
@@ -712,7 +733,7 @@ function App() {
           </div>
         </section>
 
-        <section className="card" aria-labelledby="download-section-title">
+        <section className="card" aria-labelledby="download-section-title" style={{ animationDelay: '0.15s' }}>
           <h2 id="download-section-title" className="section-title">3. Download & Results</h2>
           <p className="description">
             After completion, download the ZIP or browse individual output files below.
@@ -793,7 +814,10 @@ function App() {
                   })}
                 </div>
               ) : (
-                <div className="help-text">No files listed yet.</div>
+                <div className="empty-state">
+                  <div className="empty-illustration" aria-hidden="true">🖼️</div>
+                  <div className="caption">No files listed yet. Once processing completes, results will appear here.</div>
+                </div>
               )}
             </div>
           )}
@@ -814,7 +838,7 @@ function App() {
           </section>
         )}
 
-        <section className="card info-card" aria-labelledby="help-title">
+        <section className="card info-card" aria-labelledby="help-title" style={{ animationDelay: '0.2s' }}>
           <h2 id="help-title" className="section-title">Notes</h2>
           <ul className="notes-list">
             <li>Polling interval is approximately 2.5 seconds.</li>
